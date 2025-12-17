@@ -29,6 +29,7 @@ class RabbitMQConsumer {
       await this.bindQueue('order.received');
       await this.bindQueue('order.preparing');
       await this.bindQueue('order.ready');
+      await this.bindQueue('order.cancelled');
 
       // Consumir mensajes
       await this.consumeMessages();
