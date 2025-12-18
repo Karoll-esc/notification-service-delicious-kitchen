@@ -31,11 +31,72 @@ class NotificationService {
   }
 
   // Procesar evento de RabbitMQ y crear notificación
-  handleOrderEvent(event: OrderEvent): void {
-    const notification = this.createNotification(event);
-    this.broadcast(notification);
-    console.log(`📢 Notificación enviada: ${notification.message}`);
-  }
+    /**
+     * Procesa eventos de orden y notifica a los clientes conectados.
+     * Soporta: order.created, order.preparing, order.ready, order.cancelled
+     * @param event Evento de orden recibido
+     */
+    handleOrderEvent(event: OrderEvent): void {
+      let notification: Notification | null = null;
+      switch (event.type) {
+        case 'order.created':
+          notification = {
+            id: `${Date.now()}-${this.notificationCounter++}`,
+            type: 'info',
+            message: `Pedido #${event.orderId} recibido correctamente`,
+            orderId: event.orderId,
+            timestamp: new Date(),
+            eventType: event.type,
+            orderNumber: event.data?.orderNumber,
+            data: event.data
+          };
+          break;
+        case 'order.preparing':
+          notification = {
+            id: `${Date.now()}-${this.notificationCounter++}`,
+            type: 'warning',
+            message: `Tu pedido #${event.orderId} está siendo preparado`,
+            orderId: event.orderId,
+            timestamp: new Date(),
+            eventType: event.type,
+            orderNumber: event.data?.orderNumber,
+            data: event.data
+          };
+          break;
+        case 'order.ready':
+          notification = {
+            id: `${Date.now()}-${this.notificationCounter++}`,
+            type: 'success',
+            message: `¡Tu pedido #${event.orderId} está listo para recoger!`,
+            orderId: event.orderId,
+            timestamp: new Date(),
+            eventType: event.type,
+            orderNumber: event.data?.orderNumber,
+            data: event.data
+          };
+          break;
+        case 'order.cancelled':
+          notification = {
+            id: `${Date.now()}-${this.notificationCounter++}`,
+            type: 'warning',
+            message: `Pedido #${event.orderId} ha sido cancelado`,
+            orderId: event.orderId,
+            timestamp: new Date(),
+            eventType: event.type,
+            orderNumber: event.data?.orderNumber,
+            data: event.data
+          };
+          break;
+        // ...otros eventos...
+        default:
+          // Evento desconocido: no notificar ni lanzar error
+          return;
+      }
+      if (notification) {
+        this.broadcast(notification);
+        console.log(`📢 Notificación enviada: ${notification.message}`);
+      }
+    }
 
   // Crear notificación basada en tipo de evento
   private createNotification(event: OrderEvent): Notification {
@@ -43,14 +104,16 @@ class NotificationService {
       'order.created': `Pedido #${event.orderId} recibido correctamente`,
       'order.received': `Pedido #${event.orderId} recibido en cocina`,
       'order.preparing': `Tu pedido #${event.orderId} está siendo preparado`,
-      'order.ready': `¡Tu pedido #${event.orderId} está listo para recoger!`
+      'order.ready': `¡Tu pedido #${event.orderId} está listo para recoger!`,
+      'order.cancelled': `Pedido #${event.orderId} ha sido cancelado`
     };
 
     const types: Record<OrderEvent['type'], Notification['type']> = {
       'order.created': 'info',
       'order.received': 'info',
       'order.preparing': 'warning',
-      'order.ready': 'success'
+      'order.ready': 'success',
+      'order.cancelled': 'warning'
     };
 
     return {
@@ -75,6 +138,22 @@ class NotificationService {
   // Enviar datos a un cliente específico (formato SSE)
   private sendToClient(res: Response, notification: Notification): void {
     res.write(`data: ${JSON.stringify(notification)}\n\n`);
+  }
+
+  /**
+   * Verifica si hay clientes conectados actualmente
+   * @returns true si hay al menos un cliente conectado, false si no hay ninguno
+   */
+  hasActiveClients(): boolean {
+    return this.clients.length > 0;
+  }
+
+  /**
+   * Obtiene el número de clientes conectados
+   * @returns Cantidad de clientes SSE activos
+   */
+  getActiveClientsCount(): number {
+    return this.clients.length;
   }
 }
 
