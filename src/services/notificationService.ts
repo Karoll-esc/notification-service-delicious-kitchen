@@ -33,7 +33,7 @@ class NotificationService {
   // Procesar evento de RabbitMQ y crear notificación
     /**
      * Procesa eventos de orden y notifica a los clientes conectados.
-     * Soporta: order.created, order.ready, order.cancelled
+     * Soporta: order.created, order.preparing, order.ready, order.cancelled
      * @param event Evento de orden recibido
      */
     handleOrderEvent(event: OrderEvent): void {
@@ -44,6 +44,18 @@ class NotificationService {
             id: `${Date.now()}-${this.notificationCounter++}`,
             type: 'info',
             message: `Pedido #${event.orderId} recibido correctamente`,
+            orderId: event.orderId,
+            timestamp: new Date(),
+            eventType: event.type,
+            orderNumber: event.data?.orderNumber,
+            data: event.data
+          };
+          break;
+        case 'order.preparing':
+          notification = {
+            id: `${Date.now()}-${this.notificationCounter++}`,
+            type: 'warning',
+            message: `Tu pedido #${event.orderId} está siendo preparado`,
             orderId: event.orderId,
             timestamp: new Date(),
             eventType: event.type,
@@ -126,6 +138,22 @@ class NotificationService {
   // Enviar datos a un cliente específico (formato SSE)
   private sendToClient(res: Response, notification: Notification): void {
     res.write(`data: ${JSON.stringify(notification)}\n\n`);
+  }
+
+  /**
+   * Verifica si hay clientes conectados actualmente
+   * @returns true si hay al menos un cliente conectado, false si no hay ninguno
+   */
+  hasActiveClients(): boolean {
+    return this.clients.length > 0;
+  }
+
+  /**
+   * Obtiene el número de clientes conectados
+   * @returns Cantidad de clientes SSE activos
+   */
+  getActiveClientsCount(): number {
+    return this.clients.length;
   }
 }
 
