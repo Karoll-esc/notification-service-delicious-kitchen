@@ -31,11 +31,60 @@ class NotificationService {
   }
 
   // Procesar evento de RabbitMQ y crear notificación
-  handleOrderEvent(event: OrderEvent): void {
-    const notification = this.createNotification(event);
-    this.broadcast(notification);
-    console.log(`📢 Notificación enviada: ${notification.message}`);
-  }
+    /**
+     * Procesa eventos de orden y notifica a los clientes conectados.
+     * Soporta: order.created, order.ready, order.cancelled
+     * @param event Evento de orden recibido
+     */
+    handleOrderEvent(event: OrderEvent): void {
+      let notification: Notification | null = null;
+      switch (event.type) {
+        case 'order.created':
+          notification = {
+            id: `${Date.now()}-${this.notificationCounter++}`,
+            type: 'info',
+            message: `Pedido #${event.orderId} recibido correctamente`,
+            orderId: event.orderId,
+            timestamp: new Date(),
+            eventType: event.type,
+            orderNumber: event.data?.orderNumber,
+            data: event.data
+          };
+          break;
+        case 'order.ready':
+          notification = {
+            id: `${Date.now()}-${this.notificationCounter++}`,
+            type: 'success',
+            message: `¡Tu pedido #${event.orderId} está listo para recoger!`,
+            orderId: event.orderId,
+            timestamp: new Date(),
+            eventType: event.type,
+            orderNumber: event.data?.orderNumber,
+            data: event.data
+          };
+          break;
+        case 'order.cancelled':
+          notification = {
+            id: `${Date.now()}-${this.notificationCounter++}`,
+            type: 'warning',
+            message: `Pedido #${event.orderId} ha sido cancelado`,
+            orderId: event.orderId,
+            timestamp: new Date(),
+            eventType: event.type,
+            orderNumber: event.data?.orderNumber,
+            data: event.data
+          };
+          break;
+        // ...otros eventos...
+        default:
+          // Evento desconocido: no notificar ni lanzar error
+          return;
+      }
+      if (notification) {
+        this.broadcast(notification);
+        console.log(`📢 Notificación enviada: ${notification.message}`);
+      }
+    }
 
   // Crear notificación basada en tipo de evento
   private createNotification(event: OrderEvent): Notification {

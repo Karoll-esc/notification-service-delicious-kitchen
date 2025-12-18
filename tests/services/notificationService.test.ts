@@ -56,6 +56,14 @@ describe('NotificationService', () => {
   });
 
   describe('removeClient', () => {
+        it('no debe fallar si se intenta remover un cliente que no existe', () => {
+          const client = { write: jest.fn() } as any;
+          // No se agrega el cliente
+          expect(() => notificationService.removeClient(client)).not.toThrow();
+          // Lista debe seguir vacía
+          // @ts-ignore
+          expect(notificationService['clients']).toHaveLength(0);
+        });
     it('debe remover un cliente de la lista', () => {
       notificationService.addClient(mockResponse as Response);
       notificationService.removeClient(mockResponse as Response);
@@ -80,6 +88,29 @@ describe('NotificationService', () => {
   });
 
   describe('handleOrderEvent', () => {
+            it('broadcast no debe fallar si no hay clientes conectados', () => {
+              // @ts-ignore
+              notificationService['clients'] = [];
+              expect(() => notificationService['broadcast']({ id: '1', type: 'info', message: 'test', orderId: '1', timestamp: new Date() })).not.toThrow();
+            });
+        /**
+         * Test de robustez: evento desconocido no debe notificar ni lanzar error
+         */
+        it('no debe notificar ni fallar ante evento desconocido', () => {
+          const client = { write: jest.fn() } as any;
+          notificationService.addClient(client);
+
+          const event = {
+            orderId: 'UNK-001',
+            type: 'order.unknown',
+            timestamp: new Date(),
+          };
+
+          // No debe lanzar error ni notificar
+          expect(() => notificationService.handleOrderEvent(event as any)).not.toThrow();
+          // Solo bienvenida
+          expect(client.write).toHaveBeenCalledTimes(1);
+        });
     beforeEach(() => {
       // Silenciar console.log en tests
       jest.spyOn(console, 'log').mockImplementation(() => {});
@@ -183,6 +214,37 @@ describe('NotificationService', () => {
       const notificationCall = client.write.mock.calls[1][0];
       const data = JSON.parse(notificationCall.replace('data: ', '').trim());
       expect(data.timestamp).toBeDefined();
+    });
+
+    /**
+     * Test crítico: notificación de cancelación de pedido
+     * Valida que todos los clientes reciban la notificación adecuada cuando un pedido es cancelado.
+     */
+    it('debe notificar a todos los clientes cuando un pedido es cancelado', () => {
+      // Crear clientes mock
+      const client1 = { write: jest.fn() } as any;
+      const client2 = { write: jest.fn() } as any;
+      notificationService.addClient(client1);
+      notificationService.addClient(client2);
+
+      const event: OrderEvent = {
+        orderId: 'CANCEL-001',
+        type: 'order.cancelled',
+        timestamp: new Date(),
+      };
+
+      notificationService.handleOrderEvent(event);
+
+      // Ambos clientes deben recibir la notificación de cancelación
+      expect(client1.write).toHaveBeenCalledTimes(2); // bienvenida + notificación
+      expect(client2.write).toHaveBeenCalledTimes(2);
+
+      const notif1 = client1.write.mock.calls[1][0];
+      const notif2 = client2.write.mock.calls[1][0];
+      expect(notif1).toContain('Pedido #CANCEL-001 ha sido cancelado');
+      expect(notif1).toContain('order.cancelled');
+      expect(notif2).toContain('Pedido #CANCEL-001 ha sido cancelado');
+      expect(notif2).toContain('order.cancelled');
     });
   });
 

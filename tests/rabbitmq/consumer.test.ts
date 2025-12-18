@@ -67,7 +67,7 @@ describe('RabbitMQ Consumer', () => {
         it('debe configurar exchange tipo topic', async () => {
             await consumer.connect();
             expect(mockChannel.assertExchange).toHaveBeenCalledWith(
-                'orders',
+                'restaurant_orders',
                 'topic',
                 { durable: true },
                 expect.any(Function)
@@ -87,7 +87,7 @@ describe('RabbitMQ Consumer', () => {
             await consumer.connect();
             expect(mockChannel.bindQueue).toHaveBeenCalledWith(
                 'notifications',
-                'orders',
+                'restaurant_orders',
                 'order.created',
                 {},
                 expect.any(Function)
@@ -98,7 +98,7 @@ describe('RabbitMQ Consumer', () => {
             await consumer.connect();
             expect(mockChannel.bindQueue).toHaveBeenCalledWith(
                 'notifications',
-                'orders',
+                'restaurant_orders',
                 'order.ready',
                 {},
                 expect.any(Function)
@@ -117,6 +117,36 @@ describe('RabbitMQ Consumer', () => {
     });
 
     describe('handleMessage', () => {
+                it('debe manejar error en notificationService sin crashear', () => {
+                    jest.spyOn(console, 'error').mockImplementation(() => {});
+                    jest.spyOn(console, 'log').mockImplementation(() => {});
+                    // Forzar error en notificationService
+                    const notificationService = require('../../src/services/notificationService').default;
+                    const originalHandleOrderEvent = notificationService.handleOrderEvent;
+                    notificationService.handleOrderEvent = () => { throw new Error('Fallo intencional'); };
+
+                    const mockMessage = {
+                        content: Buffer.from(JSON.stringify({
+                            orderId: 'ERR-001',
+                            type: 'order.created',
+                            timestamp: new Date(),
+                        })),
+                    };
+
+                    expect(() => consumerCallback(mockMessage)).not.toThrow();
+                    // Restaurar
+                    notificationService.handleOrderEvent = originalHandleOrderEvent;
+                });
+
+                it('debe advertir y no lanzar error si el mensaje no es evento válido', () => {
+                    jest.spyOn(console, 'warn').mockImplementation(() => {});
+                    jest.spyOn(console, 'error').mockImplementation(() => {});
+                    jest.spyOn(console, 'log').mockImplementation(() => {});
+                    const mockMessage = {
+                        content: Buffer.from(JSON.stringify({ foo: 'bar' })),
+                    };
+                    expect(() => consumerCallback(mockMessage)).not.toThrow();
+                });
         beforeEach(async () => {
             jest.spyOn(console, 'log').mockImplementation(() => {});
             jest.spyOn(console, 'error').mockImplementation(() => {});
