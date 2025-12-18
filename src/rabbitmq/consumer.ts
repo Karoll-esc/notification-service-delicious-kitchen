@@ -159,9 +159,12 @@ class RabbitMQConsumer {
 
       console.log(`📨 Evento recibido: ${event.type} - Order #${event.orderId}`);
 
-      // Delegar al servicio de notificaciones SSE
+      // Delegar al servicio de notificaciones SSE (siempre intentar)
       notificationService.handleOrderEvent(event);
 
+      // ✅ Enviar email SIEMPRE (independientemente de conexiones SSE)
+      console.log('📧 Enviando notificación por email...');
+      
       // ✅ Si el pedido está en preparación, enviar notificación por email
       if (event.type === 'order.preparing' && event.data) {
         const { orderNumber, customerName, customerEmail } = event.data;
@@ -186,7 +189,7 @@ class RabbitMQConsumer {
         }
       }
 
-      // ✅ Si el pedido está listo, enviar notificación por email (offline)
+      // ✅ Si el pedido está listo, enviar notificación por email
       if (event.type === 'order.ready' && event.data) {
         const { orderNumber, customerName, customerEmail } = event.data;
         const items = event.data.data?.items || event.data.items; // ✅ Soportar ambas estructuras
