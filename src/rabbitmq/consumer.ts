@@ -1,5 +1,6 @@
 import * as amqp from 'amqplib/callback_api';
 import notificationService from '../services/notificationService';
+import emailNotificationService from '../services/EmailNotificationService';
 import { OrderEvent } from '../types';
 
 /**
@@ -158,8 +159,58 @@ class RabbitMQConsumer {
 
       console.log(`📨 Evento recibido: ${event.type} - Order #${event.orderId}`);
 
-      // Delegar al servicio de notificaciones
+      // Delegar al servicio de notificaciones SSE
       notificationService.handleOrderEvent(event);
+
+      // ✅ Si el pedido está en preparación, enviar notificación por email
+      if (event.type === 'order.preparing' && event.data) {
+        const { orderNumber, customerName, customerEmail } = event.data;
+        const items = event.data.data?.items || event.data.items; // ✅ Soportar ambas estructuras
+        
+        if (orderNumber && customerName && customerEmail && items && items.length > 0) {
+          emailNotificationService.sendOrderPreparingNotification(
+            orderNumber,
+            customerName,
+            customerEmail,
+            items
+          ).catch((error: Error) => {
+            console.error(`❌ Error al enviar email PREPARING para orden ${orderNumber}:`, error.message);
+          });
+        } else {
+          console.warn(`⚠️ Orden ${event.orderId} en preparación pero faltan datos para email:`, {
+            orderNumber: !!orderNumber,
+            customerName: !!customerName,
+            customerEmail: !!customerEmail,
+            items: !!(items && items.length > 0)
+          });
+        }
+      }
+
+      // ✅ Si el pedido está listo, enviar notificación por email (offline)
+      if (event.type === 'order.ready' && event.data) {
+        const { orderNumber, customerName, customerEmail } = event.data;
+        const items = event.data.data?.items || event.data.items; // ✅ Soportar ambas estructuras
+        
+        // Validación: asegurar que existen los datos requeridos
+        if (orderNumber && customerName && customerEmail && items && items.length > 0) {
+          // Envío asíncrono sin bloquear el flujo principal
+          emailNotificationService.sendOrderReadyNotification(
+            orderNumber,
+            customerName,
+            customerEmail,
+            items
+          ).catch((error: Error) => {
+            console.error(`❌ Error al enviar email READY para orden ${orderNumber}:`, error.message);
+          });
+        } else {
+          console.warn(`⚠️ Orden ${event.orderId} lista pero faltan datos para email:`, {
+            orderNumber: !!orderNumber,
+            customerName: !!customerName,
+            customerEmail: !!customerEmail,
+            items: !!(items && items.length > 0)
+          });
+        }
+      }
     } catch (error) {
       console.error('❌ Error al procesar mensaje:', error);
     }
